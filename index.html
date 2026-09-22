@@ -850,11 +850,11 @@
         <div class="modal-content">
             <div class="modal-header">📥 Экспортировать данные</div>
             <div class="form-group">
-                <label class="form-label">Скопируй текст ниже и сохрани на новом устройстве:</label>
-                <textarea class="form-textarea" id="exportText" readonly style="font-family: monospace; font-size: 11px;"></textarea>
+                <label class="form-label">Скачай файл с резервной копией данных:</label>
+                <p style="color: #6b7280; font-size: 13px; margin-top: 8px;">Файл будет сохранен с именем вроде: workout-tracker-2026-09-22.json</p>
             </div>
             <div class="button-group">
-                <button class="btn btn-primary" onclick="copyExportText()">📋 Скопировать в буфер</button>
+                <button class="btn btn-primary" onclick="downloadExportFile()">⬇️ Скачать</button>
                 <button class="btn btn-secondary" onclick="closeExportModal()">Закрыть</button>
             </div>
         </div>
@@ -865,11 +865,11 @@
         <div class="modal-content">
             <div class="modal-header">📤 Импортировать данные</div>
             <div class="form-group">
-                <label class="form-label">Вставь сохраненные данные:</label>
-                <textarea class="form-textarea" id="importText" placeholder="Скопируй текст из экспорта и вставь сюда..." style="font-family: monospace; font-size: 11px;"></textarea>
+                <label class="form-label">Выбери файл резервной копии:</label>
+                <input type="file" id="importFile" accept=".json" style="margin-top: 12px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; width: 100%;">
             </div>
             <div class="button-group">
-                <button class="btn btn-primary" onclick="importDataFromText()">✅ Импортировать</button>
+                <button class="btn btn-primary" onclick="importDataFromFile()">✅ Импортировать</button>
                 <button class="btn btn-secondary" onclick="closeImportModal()">Отмена</button>
             </div>
         </div>
@@ -897,9 +897,10 @@
         let currentTiredness = null;
 
         // Инициализация
-        function init() {
-            loadSchedule();
-            render();
+        async function init() {
+            await initDB();
+            await loadSchedule();
+            await render();
             setupServiceWorker();
         }
 
@@ -915,30 +916,65 @@
             }
         }
 
+        let db = null;
+
+        // Инициализация IndexedDB
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('WorkoutTrackerDB', 1);
+
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve(db);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    const database = event.target.result;
+                    if (!database.objectStoreNames.contains('workoutData')) {
+                        database.createObjectStore('workoutData', { keyPath: 'id' });
+                    }
+                };
+            });
+        }
+
         function getStorage() {
-            let storage = JSON.parse(localStorage.getItem('workoutData') || '{}');
-            if (!storage.schedule) storage.schedule = { ...DEFAULT_SCHEDULE };
-            if (!storage.completed) storage.completed = {};
-            if (!storage.weeklyOrder) storage.weeklyOrder = null;
-            if (!storage.weeklyOverrides) storage.weeklyOverrides = {};
-            if (!storage.notes) storage.notes = {};
-            return storage;
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['workoutData'], 'readonly');
+                const objectStore = transaction.objectStore('workoutData');
+                const request = objectStore.get('main');
+
+                request.onsuccess = () => {
+                    let storage = request.result?.data || {};
+                    if (!storage.schedule) storage.schedule = { ...DEFAULT_SCHEDULE };
+                    if (!storage.completed) storage.completed = {};
+                    if (!storage.weeklyOrder) storage.weeklyOrder = null;
+                    if (!storage.weeklyOverrides) storage.weeklyOverrides = {};
+                    if (!storage.notes) storage.notes = {};
+                    resolve(storage);
+                };
+            });
         }
 
         function saveStorage(storage) {
-            localStorage.setItem('workoutData', JSON.stringify(storage));
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['workoutData'], 'readwrite');
+                const objectStore = transaction.objectStore('workoutData');
+                objectStore.put({ id: 'main', data: storage });
+                transaction.oncomplete = () => resolve();
+            });
         }
 
-        function loadSchedule() {
-            const storage = getStorage();
+        async function loadSchedule() {
+            const storage = await getStorage();
             if (!storage.schedule) {
                 storage.schedule = { ...DEFAULT_SCHEDULE };
-                saveStorage(storage);
+                await saveStorage(storage);
             }
         }
 
-        function getWorkoutForDate(date) {
-            const storage = getStorage();
+        async function getWorkoutForDate(date) {
+            const storage = await getStorage();
 
             if (storage.weeklyOverrides) {
                 const today = new Date();
@@ -985,17 +1021,17 @@
             return `${year}-${month}-${day}`;
         }
 
-        function toggleWorkout(date) {
+        async function toggleWorkout(date) {
             const key = getDateKey(date);
-            const storage = getStorage();
+            const storage = await getStorage();
             storage.completed[key] = !storage.completed[key];
-            saveStorage(storage);
-            render();
+            await saveStorage(storage);
+            await render();
         }
 
-        function isWorkoutCompleted(date) {
+        async function isWorkoutCompleted(date) {
             const key = getDateKey(date);
-            const storage = getStorage();
+            const storage = await getStorage();
             return storage.completed[key] || false;
         }
 
@@ -1007,28 +1043,28 @@
             return dateNoTime < today;
         }
 
-        function previousMonth() {
+        async function previousMonth() {
             currentDate.setMonth(currentDate.getMonth() - 1);
-            render();
+            await render();
         }
 
-        function nextMonth() {
+        async function nextMonth() {
             currentDate.setMonth(currentDate.getMonth() + 1);
-            render();
+            await render();
         }
 
-        function switchTab(tabName) {
+        async function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
 
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
-            render();
+            await render();
         }
 
-        function openEditModal(dayIndex) {
+        async function openEditModal(dayIndex) {
             currentEditingDayIndex = dayIndex;
-            const storage = getStorage();
+            const storage = await getStorage();
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const dayOfWeek = today.getDay();
@@ -1038,7 +1074,7 @@
             const date = new Date(mondayDate);
             date.setDate(date.getDate() + dayIndex);
 
-            const currentWorkout = getWorkoutForDate(date);
+            const currentWorkout = await getWorkoutForDate(date);
 
             document.getElementById('modalTitle').textContent = `${DAYS[dayIndex]} – ${date.toLocaleDateString('ru-RU')}`;
 
@@ -1050,11 +1086,11 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'option-btn remove';
                 removeBtn.textContent = '❌ Убрать тренировку';
-                removeBtn.onclick = () => {
+                removeBtn.onclick = async () => {
                     storage.weeklyOverrides[dayIndex] = '';
-                    saveStorage(storage);
+                    await saveStorage(storage);
                     closeEditModal();
-                    render();
+                    await render();
                 };
                 options.appendChild(removeBtn);
             }
@@ -1068,11 +1104,11 @@
                     btn.style.borderColor = '#3b82f6';
                 }
                 btn.textContent = mg;
-                btn.onclick = () => {
+                btn.onclick = async () => {
                     storage.weeklyOverrides[dayIndex] = mg;
-                    saveStorage(storage);
+                    await saveStorage(storage);
                     closeEditModal();
-                    render();
+                    await render();
                 };
                 options.appendChild(btn);
             });
@@ -1085,14 +1121,14 @@
             currentEditingDayIndex = null;
         }
 
-        function openDayOptionsModal(date) {
-            const storage = getStorage();
+        async function openDayOptionsModal(date) {
+            const storage = await getStorage();
             const key = getDateKey(date);
-            const isCompleted = isWorkoutCompleted(date);
+            const isCompleted = await isWorkoutCompleted(date);
             const hasNotes = storage.notes && storage.notes[key];
 
             const dateStr = date.toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' });
-            const workout = getWorkoutForDate(date);
+            const workout = await getWorkoutForDate(date);
 
             document.getElementById('modalTitle').textContent = `${workout} (${dateStr})`;
 
@@ -1109,11 +1145,11 @@
                 toggleBtn.textContent = '✓ Отметить как выполненную';
                 toggleBtn.style.color = '#16a34a';
             }
-            toggleBtn.onclick = () => {
+            toggleBtn.onclick = async () => {
                 storage.completed[key] = !storage.completed[key];
-                saveStorage(storage);
+                await saveStorage(storage);
                 closeEditModal();
-                render();
+                await render();
             };
             options.appendChild(toggleBtn);
 
@@ -1132,11 +1168,11 @@
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'option-btn remove';
                 deleteBtn.textContent = '🗑️ Удалить заметку';
-                deleteBtn.onclick = () => {
+                deleteBtn.onclick = async () => {
                     delete storage.notes[key];
-                    saveStorage(storage);
+                    await saveStorage(storage);
                     closeEditModal();
-                    render();
+                    await render();
                 };
                 options.appendChild(deleteBtn);
             }
@@ -1144,11 +1180,11 @@
             document.getElementById('editModal').classList.add('active');
         }
 
-        function openNotesModal(date) {
+        async function openNotesModal(date) {
             currentNotesDate = new Date(date);
             currentNotesDate.setHours(0, 0, 0, 0);
 
-            const storage = getStorage();
+            const storage = await getStorage();
             const key = getDateKey(currentNotesDate);
             const notes = storage.notes[key] || {};
 
@@ -1156,7 +1192,7 @@
             currentTiredness = notes.tiredness || null;
 
             const dateStr = currentNotesDate.toLocaleDateString('ru-RU', { weekday: 'long', month: 'long', day: 'numeric' });
-            const workout = getWorkoutForDate(currentNotesDate);
+            const workout = await getWorkoutForDate(currentNotesDate);
             document.getElementById('notesModalTitle').textContent = `Заметки: ${workout} (${dateStr})`;
 
             document.getElementById('notesText').value = notes.text || '';
@@ -1206,10 +1242,10 @@
             });
         }
 
-        function saveNotes() {
+        async function saveNotes() {
             if (!currentNotesDate) return;
 
-            const storage = getStorage();
+            const storage = await getStorage();
             const key = getDateKey(currentNotesDate);
             const text = document.getElementById('notesText').value.trim();
 
@@ -1223,20 +1259,20 @@
                 delete storage.notes[key];
             }
 
-            saveStorage(storage);
+            await saveStorage(storage);
             closeNotesModal();
-            render();
+            await render();
         }
 
-        function render() {
-            renderCalendar();
-            renderWeekWorkouts();
-            renderDiary();
-            renderSchedule();
-            updateStatusInfo();
+        async function render() {
+            await renderCalendar();
+            await renderWeekWorkouts();
+            await renderDiary();
+            await renderSchedule();
+            await updateStatusInfo();
         }
 
-        function renderCalendar() {
+        async function renderCalendar() {
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
 
@@ -1268,10 +1304,10 @@
                 const isCurrentMonth = currentCalendarDate.getMonth() === month;
                 const isToday = currentCalendarDate.getTime() === today.getTime();
                 const isPast = isPastDate(currentCalendarDate);
-                const workout = getWorkoutForDate(currentCalendarDate);
-                const isCompleted = isWorkoutCompleted(currentCalendarDate);
+                const workout = await getWorkoutForDate(currentCalendarDate);
+                const isCompleted = await isWorkoutCompleted(currentCalendarDate);
 
-                const storage = getStorage();
+                const storage = await getStorage();
                 const key = getDateKey(currentCalendarDate);
                 const hasNotes = storage.notes && storage.notes[key];
 
@@ -1303,14 +1339,14 @@
             }
         }
 
-        function renderWeekWorkouts() {
+        async function renderWeekWorkouts() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const dayOfWeek = today.getDay();
             const diff = today.getDate() - today.getDay() + (dayOfWeek === 0 ? -6 : 1);
             const mondayDate = new Date(today.setDate(diff));
 
-            const storage = getStorage();
+            const storage = await getStorage();
             const container = document.getElementById('weekWorkouts');
             container.innerHTML = '';
 
@@ -1319,8 +1355,8 @@
                 date.setDate(date.getDate() + i);
                 const dateNoTime = new Date(date);
                 dateNoTime.setHours(0, 0, 0, 0);
-                const workout = getWorkoutForDate(date);
-                const isCompleted = isWorkoutCompleted(date);
+                const workout = await getWorkoutForDate(date);
+                const isCompleted = await isWorkoutCompleted(date);
                 const isPast = dateNoTime < today;
                 const isWeekend = i === 5 || i === 6; // Сб или Вс
 
@@ -1391,7 +1427,7 @@
             }
         }
 
-        function swapWorkouts(item1, item2, storage) {
+        async function swapWorkouts(item1, item2, storage) {
             const idx1 = parseInt(item1.dataset.dayIndex);
             const idx2 = parseInt(item2.dataset.dayIndex);
 
@@ -1400,12 +1436,12 @@
             }
 
             [storage.weeklyOrder[idx1], storage.weeklyOrder[idx2]] = [storage.weeklyOrder[idx2], storage.weeklyOrder[idx1]];
-            saveStorage(storage);
-            render();
+            await saveStorage(storage);
+            await render();
         }
 
-        function renderDiary() {
-            const storage = getStorage();
+        async function renderDiary() {
+            const storage = await getStorage();
             const container = document.getElementById('diaryContainer');
             container.innerHTML = '';
 
@@ -1433,7 +1469,7 @@
             }
 
             // Показываем заметки
-            entries.forEach(entry => {
+            for (const entry of entries) {
                 const date = entry.date;
                 const notes = entry.notes;
                 const dateKey = entry.dateKey;
@@ -1444,7 +1480,7 @@
                     month: 'long',
                     year: 'numeric'
                 });
-                const workout = getWorkoutForDate(date);
+                const workout = await getWorkoutForDate(date);
 
                 const entryEl = document.createElement('div');
                 entryEl.className = 'diary-entry';
@@ -1475,14 +1511,14 @@
                 deleteBtn.textContent = '🗑️';
                 deleteBtn.title = 'Удалить запись';
                 deleteBtn.type = 'button';
-                deleteBtn.addEventListener('click', () => {
+                deleteBtn.addEventListener('click', async () => {
                     if (!confirm('Вы уверены, что хотите удалить эту запись?')) {
                         return;
                     }
-                    const storage = getStorage();
+                    const storage = await getStorage();
                     delete storage.notes[dateKey];
-                    saveStorage(storage);
-                    renderDiary();
+                    await saveStorage(storage);
+                    await renderDiary();
                 });
                 headerDiv.appendChild(deleteBtn);
 
@@ -1529,12 +1565,12 @@
 
                 entryEl.appendChild(bodyDiv);
                 container.appendChild(entryEl);
-            });
+            }
         }
 
 
-        function renderSchedule() {
-            const storage = getStorage();
+        async function renderSchedule() {
+            const storage = await getStorage();
             const grid = document.getElementById('scheduleGrid');
             grid.innerHTML = '';
 
@@ -1553,12 +1589,12 @@
                         `<option value="">Выходной</option>` +
                         MUSCLE_GROUPS.map(mg => `<option value="${mg}">${mg}</option>`).join('');
                     select.value = storage.schedule[dayIndex] || '';
-                    select.onchange = (e) => {
+                    select.onchange = async (e) => {
                         storage.schedule[dayIndex] = e.target.value;
                         storage.weeklyOrder = null;
                         storage.weeklyOverrides = {};
-                        saveStorage(storage);
-                        render();
+                        await saveStorage(storage);
+                        await render();
                     };
 
                     rowEl.appendChild(select);
@@ -1568,7 +1604,7 @@
             }
         }
 
-        function updateStatusInfo() {
+        async function updateStatusInfo() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const dayOfWeek = today.getDay();
@@ -1581,10 +1617,10 @@
             for (let i = 0; i < 7; i++) {
                 const date = new Date(mondayDate);
                 date.setDate(date.getDate() + i);
-                const workout = getWorkoutForDate(date);
+                const workout = await getWorkoutForDate(date);
                 if (workout) {
                     total++;
-                    if (isWorkoutCompleted(date)) completed++;
+                    if (await isWorkoutCompleted(date)) completed++;
                 }
             }
 
@@ -1593,9 +1629,9 @@
             info.textContent = `📊 На этой неделе: ${completed} из ${total} тренировок (${percent}%)`;
         }
 
-        function resetToDefaults() {
+        async function resetToDefaults() {
             if (confirm('Вернуть расписание по умолчанию для будущих дней?')) {
-                const storage = getStorage();
+                const storage = await getStorage();
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const dayOfWeek = today.getDay();
@@ -1618,40 +1654,42 @@
                 // Сбрасываем переупорядочивание для текущей недели
                 storage.weeklyOrder = null;
 
-                saveStorage(storage);
-                render();
+                await saveStorage(storage);
+                await render();
             }
         }
 
-        function clearAllData() {
+        async function clearAllData() {
             if (confirm('Очистить ВСЕ данные о тренировках? Это нельзя отменить.')) {
                 if (confirm('Вы уверены?')) {
-                    localStorage.removeItem('workoutData');
-                    init();
+                    // Clear IndexedDB
+                    const transaction = db.transaction(['workoutData'], 'readwrite');
+                    const objectStore = transaction.objectStore('workoutData');
+                    objectStore.clear();
+                    transaction.oncomplete = async () => {
+                        await init();
+                    };
                 }
             }
         }
 
-        function openExportModal() {
-            const storage = getStorage();
+        async function downloadExportFile() {
+            const storage = await getStorage();
             const dataStr = JSON.stringify(storage, null, 2);
-            document.getElementById('exportText').value = dataStr;
-            document.getElementById('exportModal').classList.add('active');
-        }
-
-        function closeExportModal() {
-            document.getElementById('exportModal').classList.remove('active');
-        }
-
-        function copyExportText() {
-            const exportText = document.getElementById('exportText');
-            exportText.select();
-            document.execCommand('copy');
-            alert('✅ Данные скопированы в буфер обмена!\n\nТеперь ты можешь вставить их на другом устройстве через "Импортировать данные"');
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `workout-tracker-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            alert('✅ Данные скачаны!');
         }
 
         function openImportModal() {
-            document.getElementById('importText').value = '';
+            document.getElementById('importFile').value = '';
             document.getElementById('importModal').classList.add('active');
         }
 
@@ -1659,31 +1697,38 @@
             document.getElementById('importModal').classList.remove('active');
         }
 
-        function importDataFromText() {
-            const importText = document.getElementById('importText').value.trim();
-            if (!importText) {
-                alert('❌ Ошибка: поле пусто');
+        async function importDataFromFile() {
+            const fileInput = document.getElementById('importFile');
+            if (!fileInput.files.length) {
+                alert('❌ Ошибка: файл не выбран');
                 return;
             }
 
-            try {
-                const importedData = JSON.parse(importText);
+            const file = fileInput.files[0];
+            const reader = new FileReader();
 
-                // Валидируем структуру данных
-                if (!importedData.schedule && !importedData.completed && !importedData.notes) {
-                    alert('❌ Ошибка: некорректный формат данных');
-                    return;
-                }
+            reader.onload = async (event) => {
+                try {
+                    const importedData = JSON.parse(event.target.result);
 
-                if (confirm('Вы уверены? Текущие данные будут заменены импортированными.\n\nЭто действие нельзя отменить!')) {
-                    localStorage.setItem('workoutData', JSON.stringify(importedData));
-                    closeImportModal();
-                    alert('✅ Данные успешно импортированы!');
-                    init();
+                    // Валидируем структуру данных
+                    if (!importedData.schedule && !importedData.completed && !importedData.notes) {
+                        alert('❌ Ошибка: некорректный формат данных');
+                        return;
+                    }
+
+                    if (confirm('Вы уверены? Текущие данные будут заменены импортированными.\n\nЭто действие нельзя отменить!')) {
+                        await saveStorage(importedData);
+                        closeImportModal();
+                        alert('✅ Данные успешно импортированы!');
+                        await init();
+                    }
+                } catch (error) {
+                    alert('❌ Ошибка при чтении данных:\n' + error.message);
                 }
-            } catch (error) {
-                alert('❌ Ошибка при чтении данных:\n' + error.message);
-            }
+            };
+
+            reader.readAsText(file);
         }
 
         // Запуск при загрузке
