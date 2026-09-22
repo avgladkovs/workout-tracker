@@ -851,7 +851,7 @@
             <div class="modal-header">📥 Экспортировать данные</div>
             <div class="form-group">
                 <label class="form-label">Скачай файл с резервной копией данных:</label>
-                <p style="color: #6b7280; font-size: 13px; margin-top: 8px;">Файл будет сохранен с именем вроде: workout-tracker-2026-09-22.json</p>
+                <p style="color: #6b7280; font-size: 13px; margin-top: 8px;">Файл будет сохранен с именем вроде: WO_2026-09-22_23-35-42.json</p>
             </div>
             <div class="button-group">
                 <button class="btn btn-primary" onclick="downloadExportFile()">⬇️ Скачать</button>
@@ -1674,21 +1674,42 @@
         }
 
         async function downloadExportFile() {
-            const storage = await getStorage();
-            const dataStr = JSON.stringify(storage, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `workout-tracker-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            alert('✅ Данные скачаны!');
+            try {
+                const storage = await getStorage();
+                const dataStr = JSON.stringify(storage, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                
+                // Формируем имя файла: WO_YYYY-MM-DD_HH-mm-ss
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-mm-ss
+                link.download = `WO_${dateStr}_${timeStr}.json`;
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                // Закрываем модаль и показываем сообщение
+                closeExportModal();
+                alert(`✅ Данные экспортированы!\n📁 Файл: ${link.download}`);
+            } catch (error) {
+                alert(`❌ Ошибка при экспорте: ${error.message}`);
+            }
         }
 
-        function openImportModal() {
+        function openExportModal() {
+            document.getElementById('exportModal').classList.add('active');
+        }
+
+        function closeExportModal() {
+            document.getElementById('exportModal').classList.remove('active');
+        }
+
+                function openImportModal() {
             document.getElementById('importFile').value = '';
             document.getElementById('importModal').classList.add('active');
         }
