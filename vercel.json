@@ -1,0 +1,5 @@
+{
+  "buildCommand": "echo 'Static site'",
+  "devCommand": "npx http-server",
+  "outputDirectory": "."
+}
