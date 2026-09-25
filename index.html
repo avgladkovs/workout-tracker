@@ -1023,9 +1023,16 @@
 
         // Save notification time to storage
         async function setNotificationTime(time) {
-            const storage = await getStorage();
-            storage.notificationTime = time;
-            await saveStorage(storage);
+            try {
+                const storage = await getStorage();
+                storage.notificationTime = time;
+                await saveStorage(storage);
+                console.log('✅ Notification time saved:', time);
+                return true;
+            } catch (error) {
+                console.error('❌ Error saving notification time:', error);
+                return false;
+            }
         }
 
         // Update notification time from display
@@ -1033,8 +1040,13 @@
             const hours = document.getElementById('notificationHourDisplay').textContent;
             const minutes = document.getElementById('notificationMinuteDisplay').textContent;
             const time = hours + ':' + minutes;
-            await setNotificationTime(time);
-            alert('✅ Время уведомления установлено на ' + time);
+            console.log('Setting notification time to:', time);
+            const saved = await setNotificationTime(time);
+            if (saved) {
+                alert('✅ Время уведомления установлено на ' + time);
+            } else {
+                alert('❌ Ошибка при сохранении времени. Попробуйте еще раз.');
+            }
         }
 
         // Initialize notification time display
@@ -1107,14 +1119,23 @@
             const currentTotalMinutes = hours * 60 + minutes;
             const timeDiff = Math.abs(prefTotalMinutes - currentTotalMinutes);
             
+            // Debug logging
+            if (minutes % 10 === 0) {  // Log every 10 minutes to avoid spam
+                console.log(`Notification check: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} | Set time: ${notificationTime} | Diff: ${timeDiff} min`);
+            }
+            
             if (timeDiff <= 5) {
                 const storage = await getStorage();
                 const today = getDateKey(new Date());
                 const lastNotified = storage.lastNotificationDate;
 
+                console.log(`Time window matched! Today: ${today}, Last notified: ${lastNotified}`);
+
                 // Only show once per day
                 if (lastNotified !== today && Notification.permission === 'granted') {
                     const workout = await getWorkoutForDate(new Date());
+                    console.log(`Notification permission granted. Workout for today: ${workout}`);
+                    
                     if (workout) {
                         const exercises = EXERCISES[workout] || [];
                         const selectedExercises = exercises.slice(0, 5);
@@ -1129,7 +1150,14 @@
                         // Update last notification date
                         storage.lastNotificationDate = today;
                         await saveStorage(storage);
+                        console.log('✅ Notification sent and saved');
+                    } else {
+                        console.log('ℹ️  No workout scheduled for today');
                     }
+                } else if (lastNotified === today) {
+                    console.log('ℹ️  Already notified today');
+                } else if (Notification.permission !== 'granted') {
+                    console.log('⚠️  Notification permission not granted:', Notification.permission);
                 }
             }
         }
@@ -1216,6 +1244,7 @@
                     if (!storage.weeklyOverrides) storage.weeklyOverrides = {};
                     if (!storage.notes) storage.notes = {};
                     if (!storage.lastNotificationDate) storage.lastNotificationDate = null;
+                    if (!storage.notificationTime) storage.notificationTime = '08:30';
                     resolve(storage);
                 };
             });
