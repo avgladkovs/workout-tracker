@@ -1100,6 +1100,23 @@
             'Ноги': ['Приседания', 'Жим ногами', 'Выпады', 'Сгибание ног', 'Разгибание ног'],
             'Руки': ['Подъём на бицепс', 'Жим на трицепс', 'Молоток', 'Французский жим', 'Отжимания на брусьях'],
             'Ягодицы': ['Приседания', 'Жим ногами', 'Ягодичный мост', 'Разведение ног', 'Гиперэкстензия']
+        // Debug function - shows current schedule and exercises
+        function debugWorkoutData() {
+            console.log('=== WORKOUT DEBUG INFO ===');
+            console.log('Default Schedule:', DEFAULT_SCHEDULE);
+            console.log('Exercises Object:', EXERCISES);
+            getStorage().then(storage => {
+                console.log('Stored Schedule:', storage.schedule);
+                console.log('Current Day (0=Mon):', new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+                const today = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+                const storedWorkout = storage.schedule[today];
+                console.log('Workout for today:', storedWorkout);
+                console.log('Exercises for today:', EXERCISES[storedWorkout] || 'NOT FOUND');
+            });
+        }
+        
+        // Call this to debug: window.debugWorkoutData()
+        
         };
 
         // Check and show notification if needed
@@ -1134,11 +1151,16 @@
                 // Only show once per day
                 if (lastNotified !== today && Notification.permission === 'granted') {
                     const workout = await getWorkoutForDate(new Date());
-                    console.log(`Notification permission granted. Workout for today: ${workout}`);
+                    console.log(`Workout for today: "${workout}"`);
+                    console.log('Available exercises keys:', Object.keys(EXERCISES));
                     
                     if (workout) {
                         const exercises = EXERCISES[workout] || [];
-                        const selectedExercises = exercises.slice(0, 5);
+                        console.log(`Exercises found for "${workout}":`, exercises.length > 0 ? exercises : 'NONE FOUND');
+                        
+                        const selectedExercises = exercises.length > 0 
+                            ? exercises.slice(0, 5)
+                            : ['Рекомендации недоступны - проверьте название тренировки'];
                         const exerciseList = selectedExercises.join('\n');
 
                         new Notification('💪 Тренировка дня', {
