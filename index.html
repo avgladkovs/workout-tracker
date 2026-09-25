@@ -872,9 +872,14 @@
             <div id="settings" class="tab-content">
                 <div class="section-title">🔔 Уведомления</div>
                 <div class="button-group">
-                    <button class="btn btn-primary" onclick="setupNotifications()">🔔 Включить уведомления в 8:30</button>
+                    <div class="form-group">
+                        <label class="form-label">Время уведомления</label>
+                        <input type="time" id="notificationTimeInput" class="form-input" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px;">
+                    </div>
+                    <button class="btn btn-primary" onclick="updateNotificationTime()">✅ Установить время</button>
+                    <button class="btn btn-primary" onclick="setupNotifications()">🔔 Включить уведомления</button>
                     <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
-                        Получайте ежедневные напоминания о тренировке с рекомендуемыми упражнениями
+                        Получайте ежедневные напоминания о тренировке с рекомендуемыми упражнениями в выбранное время
                     </p>
                 </div>
 
@@ -993,6 +998,37 @@
         let currentTiredness = null;
 
         // Exercise database for each muscle group
+        // Get notification time from storage
+        async function getNotificationTime() {
+            const storage = await getStorage();
+            return storage.notificationTime || '08:30'; // Default to 08:30
+        }
+
+        // Save notification time to storage
+        async function setNotificationTime(time) {
+            const storage = await getStorage();
+            storage.notificationTime = time;
+            await saveStorage(storage);
+        }
+
+        // Update notification time from input
+        async function updateNotificationTime() {
+            const input = document.getElementById('notificationTimeInput');
+            if (input && input.value) {
+                await setNotificationTime(input.value);
+                alert('✅ Время уведомления установлено на ' + input.value);
+            }
+        }
+
+        // Initialize notification time display
+        async function initNotificationTimeDisplay() {
+            const time = await getNotificationTime();
+            const input = document.getElementById('notificationTimeInput');
+            if (input) {
+                input.value = time;
+            }
+        }
+
         const EXERCISES = {
             'Грудь': ['Жим лёжа', 'Отжимания', 'Жим гантелей', 'Кроссовер', 'Разводка гантелей'],
             'Спина': ['Подтягивания', 'Тяга штанги', 'Тяга гантели', 'Горизонтальная тяга', 'Гиперэкстензия'],
@@ -1005,17 +1041,25 @@
         // Check and show notification if needed
         async function checkAndShowNotification() {
             if (!('Notification' in window)) return;
-            
+
             const now = new Date();
             const hours = now.getHours();
             const minutes = now.getMinutes();
             
-            // Check if it's between 8:25 and 8:35 AM
-            if ((hours === 8 && minutes >= 25 && minutes <= 35) || (hours === 8 && minutes === 30)) {
+            // Get user's preferred notification time
+            const notificationTime = await getNotificationTime();
+            const [prefHours, prefMinutes] = notificationTime.split(':').map(Number);
+            
+            // Check if current time is within ±5 minutes of preferred time
+            const prefTotalMinutes = prefHours * 60 + prefMinutes;
+            const currentTotalMinutes = hours * 60 + minutes;
+            const timeDiff = Math.abs(prefTotalMinutes - currentTotalMinutes);
+            
+            if (timeDiff <= 5) {
                 const storage = await getStorage();
                 const today = getDateKey(new Date());
                 const lastNotified = storage.lastNotificationDate;
-                
+
                 // Only show once per day
                 if (lastNotified !== today && Notification.permission === 'granted') {
                     const workout = await getWorkoutForDate(new Date());
@@ -1023,13 +1067,13 @@
                         const exercises = EXERCISES[workout] || [];
                         const selectedExercises = exercises.slice(0, 5);
                         const exerciseList = selectedExercises.join('\n');
-                        
+
                         new Notification('💪 Тренировка дня', {
                             body: `${workout}\n\nУпражнения:\n${exerciseList}`,
                             icon: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22%3E%3Crect fill=%22%231e40af%22 width=%22192%22 height=%22192%22/%3E%3Ctext x=%2296%22 y=%22120%22 font-size=%2280%22 fill=%22white%22 text-anchor=%22middle%22 font-weight=%22bold%22%3E💪%3C/text%3E%3C/svg%3E',
                             tag: 'workout-daily'
                         });
-                        
+
                         // Update last notification date
                         storage.lastNotificationDate = today;
                         await saveStorage(storage);
