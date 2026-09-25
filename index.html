@@ -200,6 +200,10 @@
             margin-bottom: 16px;
         }
 
+        .calendar-spacer {
+            display: none;
+        }
+
         .day-header {
             text-align: center;
             font-weight: 600;
@@ -846,7 +850,7 @@
             <div id="calendar" class="tab-content active">
                 <div class="month-nav">
                     <button onclick="previousMonth()">← Назад</button>
-                    <span id="currentMonth"></span>
+                    <span id="currentMonth" style="font-size: 15px; font-weight: 600;"></span>
                     <button onclick="nextMonth()">Вперед →</button>
                 </div>
 
@@ -1368,7 +1372,7 @@
             const calendar = document.getElementById('calendarGrid');
             calendar.innerHTML = '';
 
-            // Заголовки дней
+            // Заголовки дней недели
             DAYS.forEach(day => {
                 const header = document.createElement('div');
                 header.className = 'day-header';
@@ -1378,16 +1382,23 @@
 
             const firstDay = new Date(year, month, 1);
             const lastDay = new Date(year, month + 1, 0);
-            const startDate = new Date(firstDay);
-            startDate.setDate(startDate.getDate() - (firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1));
+            const startDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // 0 = Monday, 6 = Sunday
+            const daysInMonth = lastDay.getDate();
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            let currentCalendarDate = new Date(startDate);
-            for (let i = 0; i < 42; i++) {
+            // Add spacers for days before the first day of the month
+            for (let i = 0; i < startDayOfWeek; i++) {
+                const spacer = document.createElement('div');
+                spacer.className = 'calendar-spacer';
+                calendar.appendChild(spacer);
+            }
+
+            // Add all days of the current month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentCalendarDate = new Date(year, month, day);
                 const dayEl = document.createElement('div');
-                const isCurrentMonth = currentCalendarDate.getMonth() === month;
                 const isToday = currentCalendarDate.getTime() === today.getTime();
                 const isPast = isPastDate(currentCalendarDate);
                 const workout = await getWorkoutForDate(currentCalendarDate);
@@ -1398,7 +1409,6 @@
                 const hasNotes = storage.notes && storage.notes[key];
 
                 dayEl.className = 'day';
-                if (!isCurrentMonth) dayEl.classList.add('other-month');
                 if (isToday) dayEl.classList.add('today');
                 if (workout) dayEl.classList.add('has-workout');
                 if (isPast) dayEl.classList.add('past');
@@ -1406,13 +1416,12 @@
                 else if (workout) dayEl.classList.add('missed');
                 if (hasNotes) dayEl.classList.add('has-notes');
 
-                const dateNum = currentCalendarDate.getDate();
-                dayEl.innerHTML = `<div class="day-date">${dateNum}</div>`;
+                dayEl.innerHTML = `<div class="day-date">${day}</div>`;
                 if (workout) {
                     dayEl.innerHTML += `<div class="day-workout">${workout}</div>`;
                 }
 
-                if (isCurrentMonth && workout) {
+                if (workout) {
                     dayEl.style.cursor = 'pointer';
                     const dateForClick = new Date(currentCalendarDate);
                     dayEl.onclick = (e) => {
@@ -1421,7 +1430,6 @@
                 }
 
                 calendar.appendChild(dayEl);
-                currentCalendarDate.setDate(currentCalendarDate.getDate() + 1);
             }
         }
 
