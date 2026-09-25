@@ -874,7 +874,24 @@
                 <div class="button-group">
                     <div class="form-group">
                         <label class="form-label">Время уведомления</label>
-                        <input type="time" id="notificationTimeInput" class="form-input" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 16px; padding: 16px; background: var(--fill-tertiary); border-radius: 12px; margin-bottom: 12px;">
+                            <!-- Hours -->
+                            <div style="text-align: center;">
+                                <button class="btn btn-secondary" onclick="decreaseHour()" style="width: 48px; height: 40px; margin-bottom: 8px;">−</button>
+                                <div id="notificationHourDisplay" style="font-size: 32px; font-weight: bold; min-width: 60px; color: var(--text-primary); font-variant-numeric: tabular-nums;">08</div>
+                                <button class="btn btn-secondary" onclick="increaseHour()" style="width: 48px; height: 40px; margin-top: 8px;">+</button>
+                            </div>
+                            
+                            <!-- Separator -->
+                            <div style="font-size: 28px; font-weight: bold; color: var(--text-primary);">:</div>
+                            
+                            <!-- Minutes -->
+                            <div style="text-align: center;">
+                                <button class="btn btn-secondary" onclick="decreaseMinute()" style="width: 48px; height: 40px; margin-bottom: 8px;">−</button>
+                                <div id="notificationMinuteDisplay" style="font-size: 32px; font-weight: bold; min-width: 60px; color: var(--text-primary); font-variant-numeric: tabular-nums;">30</div>
+                                <button class="btn btn-secondary" onclick="increaseMinute()" style="width: 48px; height: 40px; margin-top: 8px;">+</button>
+                            </div>
+                        </div>
                     </div>
                     <button class="btn btn-primary" onclick="updateNotificationTime()">✅ Установить время</button>
                     <button class="btn btn-primary" onclick="setupNotifications()">🔔 Включить уведомления</button>
@@ -1011,22 +1028,57 @@
             await saveStorage(storage);
         }
 
-        // Update notification time from input
+        // Update notification time from display
         async function updateNotificationTime() {
-            const input = document.getElementById('notificationTimeInput');
-            if (input && input.value) {
-                await setNotificationTime(input.value);
-                alert('✅ Время уведомления установлено на ' + input.value);
-            }
+            const hours = document.getElementById('notificationHourDisplay').textContent;
+            const minutes = document.getElementById('notificationMinuteDisplay').textContent;
+            const time = hours + ':' + minutes;
+            await setNotificationTime(time);
+            alert('✅ Время уведомления установлено на ' + time);
         }
 
         // Initialize notification time display
         async function initNotificationTimeDisplay() {
             const time = await getNotificationTime();
-            const input = document.getElementById('notificationTimeInput');
-            if (input) {
-                input.value = time;
-            }
+            const [hours, minutes] = time.split(':').map(Number);
+            document.getElementById('notificationHourDisplay').textContent = String(hours).padStart(2, '0');
+            document.getElementById('notificationMinuteDisplay').textContent = String(minutes).padStart(2, '0');
+        }
+        
+        // Hour and minute adjustment functions
+        function getSelectedTime() {
+            const hours = parseInt(document.getElementById('notificationHourDisplay').textContent);
+            const minutes = parseInt(document.getElementById('notificationMinuteDisplay').textContent);
+            return { hours, minutes };
+        }
+        
+        function setDisplayTime(hours, minutes) {
+            // Normalize values
+            hours = ((hours % 24) + 24) % 24;
+            minutes = ((minutes % 60) + 60) % 60;
+            
+            document.getElementById('notificationHourDisplay').textContent = String(hours).padStart(2, '0');
+            document.getElementById('notificationMinuteDisplay').textContent = String(minutes).padStart(2, '0');
+        }
+        
+        function increaseHour() {
+            const { hours, minutes } = getSelectedTime();
+            setDisplayTime(hours + 1, minutes);
+        }
+        
+        function decreaseHour() {
+            const { hours, minutes } = getSelectedTime();
+            setDisplayTime(hours - 1, minutes);
+        }
+        
+        function increaseMinute() {
+            const { hours, minutes } = getSelectedTime();
+            setDisplayTime(hours, minutes + 1);
+        }
+        
+        function decreaseMinute() {
+            const { hours, minutes } = getSelectedTime();
+            setDisplayTime(hours, minutes - 1);
         }
 
         const EXERCISES = {
