@@ -200,10 +200,6 @@
             margin-bottom: 16px;
         }
 
-        .calendar-spacer {
-            display: none;
-        }
-
         .day-header {
             text-align: center;
             font-weight: 600;
@@ -1382,23 +1378,16 @@
 
             const firstDay = new Date(year, month, 1);
             const lastDay = new Date(year, month + 1, 0);
-            const startDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // 0 = Monday, 6 = Sunday
-            const daysInMonth = lastDay.getDate();
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() - (firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1));
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            // Add spacers for days before the first day of the month
-            for (let i = 0; i < startDayOfWeek; i++) {
-                const spacer = document.createElement('div');
-                spacer.className = 'calendar-spacer';
-                calendar.appendChild(spacer);
-            }
-
-            // Add all days of the current month
-            for (let day = 1; day <= daysInMonth; day++) {
-                const currentCalendarDate = new Date(year, month, day);
+            let currentCalendarDate = new Date(startDate);
+            for (let i = 0; i < 42; i++) {
                 const dayEl = document.createElement('div');
+                const isCurrentMonth = currentCalendarDate.getMonth() === month;
                 const isToday = currentCalendarDate.getTime() === today.getTime();
                 const isPast = isPastDate(currentCalendarDate);
                 const workout = await getWorkoutForDate(currentCalendarDate);
@@ -1409,19 +1398,25 @@
                 const hasNotes = storage.notes && storage.notes[key];
 
                 dayEl.className = 'day';
+                if (!isCurrentMonth) {
+                    dayEl.classList.add('other-month');
+                    dayEl.style.opacity = '0.2';
+                    dayEl.style.pointerEvents = 'none';
+                }
                 if (isToday) dayEl.classList.add('today');
                 if (workout) dayEl.classList.add('has-workout');
                 if (isPast) dayEl.classList.add('past');
                 if (isCompleted) dayEl.classList.add('completed');
-                else if (workout) dayEl.classList.add('missed');
+                else if (workout && isCurrentMonth) dayEl.classList.add('missed');
                 if (hasNotes) dayEl.classList.add('has-notes');
 
-                dayEl.innerHTML = `<div class="day-date">${day}</div>`;
-                if (workout) {
+                const dateNum = currentCalendarDate.getDate();
+                dayEl.innerHTML = `<div class="day-date">${dateNum}</div>`;
+                if (workout && isCurrentMonth) {
                     dayEl.innerHTML += `<div class="day-workout">${workout}</div>`;
                 }
 
-                if (workout) {
+                if (isCurrentMonth && workout) {
                     dayEl.style.cursor = 'pointer';
                     const dateForClick = new Date(currentCalendarDate);
                     dayEl.onclick = (e) => {
@@ -1430,6 +1425,7 @@
                 }
 
                 calendar.appendChild(dayEl);
+                currentCalendarDate.setDate(currentCalendarDate.getDate() + 1);
             }
         }
 
