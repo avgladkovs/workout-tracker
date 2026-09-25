@@ -870,6 +870,14 @@
 
             <!-- Вкладка Настройки -->
             <div id="settings" class="tab-content">
+                <div class="section-title">🔔 Уведомления</div>
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="setupNotifications()">🔔 Включить уведомления в 8:30</button>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                        Получайте ежедневные напоминания о тренировке с рекомендуемыми упражнениями
+                    </p>
+                </div>
+
                 <div class="section-title">Расписание упражнений</div>
                 <div class="schedule-grid" id="scheduleGrid"></div>
 
@@ -984,12 +992,84 @@
         let currentMood = null;
         let currentTiredness = null;
 
+        // Exercise database for each muscle group
+        const EXERCISES = {
+            'Грудь': ['Жим лёжа', 'Отжимания', 'Жим гантелей', 'Кроссовер', 'Разводка гантелей'],
+            'Спина': ['Подтягивания', 'Тяга штанги', 'Тяга гантели', 'Горизонтальная тяга', 'Гиперэкстензия'],
+            'Плечи': ['Жим над головой', 'Махи гантелей', 'Жим Арнольда', 'Разводка в тренажёре', 'Боковые махи'],
+            'Ноги': ['Приседания', 'Жим ногами', 'Выпады', 'Сгибание ног', 'Разгибание ног'],
+            'Руки': ['Подъём на бицепс', 'Жим на трицепс', 'Молоток', 'Французский жим', 'Отжимания на брусьях'],
+            'Ягодицы': ['Приседания', 'Жим ногами', 'Ягодичный мост', 'Разведение ног', 'Гиперэкстензия']
+        };
+
+        // Check and show notification if needed
+        async function checkAndShowNotification() {
+            if (!('Notification' in window)) return;
+            
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            
+            // Check if it's between 8:25 and 8:35 AM
+            if ((hours === 8 && minutes >= 25 && minutes <= 35) || (hours === 8 && minutes === 30)) {
+                const storage = await getStorage();
+                const today = getDateKey(new Date());
+                const lastNotified = storage.lastNotificationDate;
+                
+                // Only show once per day
+                if (lastNotified !== today && Notification.permission === 'granted') {
+                    const workout = await getWorkoutForDate(new Date());
+                    if (workout) {
+                        const exercises = EXERCISES[workout] || [];
+                        const selectedExercises = exercises.slice(0, 5);
+                        const exerciseList = selectedExercises.join('\n');
+                        
+                        new Notification('💪 Тренировка дня', {
+                            body: `${workout}\n\nУпражнения:\n${exerciseList}`,
+                            icon: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 192 192%22%3E%3Crect fill=%22%231e40af%22 width=%22192%22 height=%22192%22/%3E%3Ctext x=%2296%22 y=%22120%22 font-size=%2280%22 fill=%22white%22 text-anchor=%22middle%22 font-weight=%22bold%22%3E💪%3C/text%3E%3C/svg%3E',
+                            tag: 'workout-daily'
+                        });
+                        
+                        // Update last notification date
+                        storage.lastNotificationDate = today;
+                        await saveStorage(storage);
+                    }
+                }
+            }
+        }
+
+        async function setupNotifications() {
+            if (!('Notification' in window)) {
+                alert('Браузер не поддерживает уведомления');
+                return;
+            }
+            
+            if (Notification.permission === 'granted') {
+                alert('✅ Уведомления уже включены!');
+                return;
+            }
+            
+            if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        alert('✅ Уведомления включены! Вы будете получать напоминания в 8:30');
+                    }
+                });
+            } else {
+                alert('⚠️ Вы запретили уведомления браузеру. Включите их в настройках браузера.');
+            }
+        }
+
         // Инициализация
         async function init() {
             await initDB();
             await loadSchedule();
             await render();
             setupServiceWorker();
+            checkAndShowNotification();
+            
+            // Check for notifications every minute
+            setInterval(checkAndShowNotification, 60000);
         }
 
         function setupServiceWorker() {
@@ -1039,6 +1119,7 @@
                     if (!storage.weeklyOrder) storage.weeklyOrder = null;
                     if (!storage.weeklyOverrides) storage.weeklyOverrides = {};
                     if (!storage.notes) storage.notes = {};
+                    if (!storage.lastNotificationDate) storage.lastNotificationDate = null;
                     resolve(storage);
                 };
             });
