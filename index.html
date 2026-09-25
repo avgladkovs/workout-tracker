@@ -155,10 +155,12 @@
 
         .tab-content {
             display: none;
+            width: 100%;
         }
 
         .tab-content.active {
             display: block;
+            width: 100%;
         }
 
         .month-nav {
@@ -1115,6 +1117,22 @@
             });
         }
         
+        
+        // Debug function to check calendar rendering
+        function debugCalendar() {
+            const calendarGrid = document.getElementById('calendarGrid');
+            const calendarTab = document.getElementById('calendar');
+            console.log('=== CALENDAR DEBUG ===');
+            console.log('Calendar tab visible:', window.getComputedStyle(calendarTab).display);
+            console.log('Calendar grid children count:', calendarGrid.children.length);
+            console.log('Calendar grid HTML length:', calendarGrid.innerHTML.length);
+            console.log('Calendar grid:', calendarGrid);
+            console.log('Current active tabs:', document.querySelectorAll('.tab-content.active').length);
+            Array.from(document.querySelectorAll('.tab-content')).forEach(el => {
+                console.log(`Tab ${el.id}: ${el.classList.contains('active') ? 'ACTIVE' : 'hidden'}`);
+            });
+        }
+
         // Call this to debug: window.debugWorkoutData()
         
         };
