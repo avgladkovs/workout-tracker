@@ -1232,9 +1232,10 @@
             await initDB();
             await loadSchedule();
             await render();
+            await initNotificationTimeDisplay();
             setupServiceWorker();
             checkAndShowNotification();
-            
+
             // Check for notifications every minute
             setInterval(checkAndShowNotification, 60000);
         }
